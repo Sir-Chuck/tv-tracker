@@ -3,109 +3,148 @@ import pandas as pd
 import requests
 from datetime import date
 
-# --- App Config ---
-st.set_page_config(page_title="TV Show Tracker", layout="centered")
+# --- Config ---
+st.set_page_config(page_title="TV Tracker", layout="wide")
 
-st.title("📺 My TV Show Tracker")
+# --- Styles ---
+st.markdown("""
+    <style>
+        html, body, [class*="css"] {
+            font-family: Verdana !important;
+            color: #2a2a2a;
+        }
+        .title {
+            font-family: 'Courier New', monospace;
+            font-size: 38px;
+            font-weight: 400;
+            margin-bottom: 0;
+        }
+        .chuck {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: -10px;
+            margin-bottom: 20px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-# --- Load or Create Tracker ---
+st.markdown('<div class="title">TV Tracker</div>', unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class="chuck">
+        <span style="color:#f27802">C</span>
+        <span style="color:#2e0854">H</span>
+        <span style="color:#7786c8">U</span>
+        <span style="color:#708090">C</span>
+        <span style="color:#b02711">K</span>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# --- Constants ---
+OMDB_API_KEY = "ead2f7a6"
+CSV_FILE = "tv_data.csv"
+
+# --- Load CSV ---
 @st.cache_data
 def load_data():
     try:
-        return pd.read_csv("tv_tracker.csv")
+        return pd.read_csv(CSV_FILE)
     except FileNotFoundError:
-        return pd.DataFrame(columns=[
-            "Title", "Year", "Genre", "IMDb Rating", 
-            "Network", "Production", "My Rating", 
-            "Date Watched", "Favorite Character", 
-            "Notes", "Status"
-        ])
+        columns = [
+            "Title", "Genre", "Watched", "Rating", "Years", "Streaming", "Production",
+            "First Watch", "Rewatchability", "Originality", "Characters",
+            "Production Score", "Conclusiveness", "Writing", "Avg Score"
+        ]
+        return pd.DataFrame(columns=columns)
 
 data = load_data()
 
-# --- OMDb API Call ---
-OMDB_API_KEY = st.secrets["OMDB_API_KEY"]
-
-def fetch_show_data(title):
-    # First try exact title
+# --- OMDb Search ---
+def fetch_omdb_data(title):
     url = f"http://www.omdbapi.com/?t={title}&apikey={OMDB_API_KEY}&type=series"
-    res = requests.get(url)
-    data = res.json()
+    r = requests.get(url).json()
+    if r.get("Response") == "True":
+        return {
+            "Title": r.get("Title", ""),
+            "Genre": r.get("Genre", ""),
+            "Rating": r.get("imdbRating", ""),
+            "Years": r.get("Year", ""),
+            "Production": r.get("Production", "")
+        }
+    return {}
 
-    if data.get("Response") == "True":
-        return data
+# --- Upload CSV ---
+st.markdown("📂 **Upload a CSV to start or use the form below to add new shows.**")
+uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+if uploaded_file:
+    data = pd.read_csv(uploaded_file)
+    data.to_csv(CSV_FILE, index=False)
+    st.success("✅ CSV uploaded successfully!")
 
-    # If not found, try fuzzy search
-    search_url = f"http://www.omdbapi.com/?s={title}&apikey={OMDB_API_KEY}&type=series"
-    search_res = requests.get(search_url).json()
-    results = search_res.get("Search", [])
+# --- Display Table ---
+st.subheader("📊 My Tracked Shows")
+st.dataframe(data.sort_values("Avg Score", ascending=False), use_container_width=True)
 
-    if results:
-        best_match_title = results[0]["Title"]
-        st.warning(f"No exact match. Showing closest match: **{best_match_title}**")
-        fallback_url = f"http://www.omdbapi.com/?t={best_match_title}&apikey={OMDB_API_KEY}&type=series"
-        fallback_res = requests.get(fallback_url).json()
-        if fallback_res.get("Response") == "True":
-            return fallback_res
+st.markdown("---")
 
-    return None  # Nothing found
+# --- Add New Show ---
+st.header("➕ Add a New Show")
 
-# --- Search Field ---
-title_input = st.text_input("Search for a TV Show")
+title_input = st.text_input("TV Show Title")
+autofill = fetch_omdb_data(title_input) if title_input else {}
 
-if title_input:
-    show = fetch_show_data(title_input)
+with st.form("add_form"):
+    title = st.text_input("Title", value=autofill.get("Title", ""))
+    genre = st.text_input("Genre", value=autofill.get("Genre", ""))
+    watched = st.selectbox("Watched Status", ["Completed", "In Progress", "Ongoing", "Not Started"])
+    rating = st.text_input("IMDb Rating", value=autofill.get("Rating", ""))
+    years = st.text_input("Years it Ran", value=autofill.get("Years", ""))
+    streaming = st.text_input("Streaming Platform")
+    production = st.text_input("Production", value=autofill.get("Production", ""))
 
-    if show and show.get("Response") == "True":
-        # Display IMDb Info
-        st.image(show.get("Poster"), width=200)
-        st.markdown(f"## {show['Title']}")
-        st.write(f"**Years Aired**: {show.get('Year', 'N/A')}")
-        st.write(f"**Genre**: {show.get('Genre', 'N/A')}")
-        st.write(f"**IMDb Rating**: ⭐ {show.get('imdbRating', 'N/A')}")
-        st.write(f"**Production**: {show.get('Production', 'N/A')}")
-        st.write(f"**Released**: {show.get('Released', 'N/A')}")
+    st.markdown("### 🎯 Your Personal Scores (0–10)")
+    fw = st.slider("First Watch", 0, 10, 5)
+    rw = st.slider("Rewatchability", 0, 10, 5)
+    orig = st.slider("Originality", 0, 10, 5)
+    chars = st.slider("Characters", 0, 10, 5)
+    prod_score = st.slider("Production Quality", 0, 10, 5)
+    concl = st.slider("Conclusiveness", 0, 10, 5)
+    writing = st.slider("Writing", 0, 10, 5)
 
-        # --- Custom Rating Form ---
-        with st.form("rating_form"):
-            st.subheader("📓 Your Rating")
-            my_rating = st.slider("My Rating (1-10)", 1, 10, 5)
-            date_watched = st.date_input("Date Watched", value=date.today())
-            fav_char = st.text_input("Favorite Character")
-            notes = st.text_area("Notes / Review")
-            status = st.selectbox("Status", ["Watching", "Completed"])
-            submitted = st.form_submit_button("Save Entry")
+    if st.form_submit_button("Add Show"):
+        # Fill missing fields
+        if not genre or not rating or not years or not production:
+            omdb_fallback = fetch_omdb_data(title)
+            genre = genre or omdb_fallback.get("Genre", "")
+            rating = rating or omdb_fallback.get("Rating", "")
+            years = years or omdb_fallback.get("Years", "")
+            production = production or omdb_fallback.get("Production", "")
 
-            if submitted:
-                new_entry = {
-                    "Title": show["Title"],
-                    "Year": show["Year"],
-                    "Genre": show["Genre"],
-                    "IMDb Rating": show["imdbRating"],
-                    "Network": show["Released"],  # Approximation
-                    "Production": show.get("Production", "N/A"),
-                    "My Rating": my_rating,
-                    "Date Watched": date_watched,
-                    "Favorite Character": fav_char,
-                    "Notes": notes,
-                    "Status": status
-                }
-                data = pd.concat([data, pd.DataFrame([new_entry])], ignore_index=True)
-                data.to_csv("tv_tracker.csv", index=False)
-                st.success("✅ Saved to Watchlist!")
+        avg = round((fw + rw + orig + chars + prod_score + concl + writing) / 7, 2)
+        new_row = {
+            "Title": title,
+            "Genre": genre,
+            "Watched": watched,
+            "Rating": rating,
+            "Years": years,
+            "Streaming": streaming,
+            "Production": production,
+            "First Watch": fw,
+            "Rewatchability": rw,
+            "Originality": orig,
+            "Characters": chars,
+            "Production Score": prod_score,
+            "Conclusiveness": concl,
+            "Writing": writing,
+            "Avg Score": avg
+        }
+        data = pd.concat([data, pd.DataFrame([new_row])], ignore_index=True)
+        data.to_csv(CSV_FILE, index=False)
+        st.success(f"✅ '{title}' added to tracker!")
 
-    else:
-        st.error("❌ Show not found. Try refining your title.")
-
-# --- Show Tracker Table ---
+# --- Download Button ---
 if not data.empty:
-    st.subheader("📘 Your Watchlist")
-    st.dataframe(data)
-
-    if st.checkbox("🔽 Show raw data"):
-        st.write(data)
-
-    if st.checkbox("📤 Export to CSV"):
-        csv = data.to_csv(index=False)
-        st.download_button("Download CSV", csv, "tv_tracker.csv", "text/csv")
-
+    csv = data.to_csv(index=False)
+    st.download_button("📥 Download Tracked Shows (CSV)", csv, "tv_data.csv", "text/csv")
