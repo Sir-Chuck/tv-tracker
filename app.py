@@ -27,11 +27,28 @@ data = load_data()
 OMDB_API_KEY = st.secrets["OMDB_API_KEY"]
 
 def fetch_show_data(title):
+    # First try exact title
     url = f"http://www.omdbapi.com/?t={title}&apikey={OMDB_API_KEY}&type=series"
     res = requests.get(url)
-    if res.status_code == 200:
-        return res.json()
-    return None
+    data = res.json()
+
+    if data.get("Response") == "True":
+        return data
+
+    # If not found, try fuzzy search
+    search_url = f"http://www.omdbapi.com/?s={title}&apikey={OMDB_API_KEY}&type=series"
+    search_res = requests.get(search_url).json()
+    results = search_res.get("Search", [])
+
+    if results:
+        best_match_title = results[0]["Title"]
+        st.warning(f"No exact match. Showing closest match: **{best_match_title}**")
+        fallback_url = f"http://www.omdbapi.com/?t={best_match_title}&apikey={OMDB_API_KEY}&type=series"
+        fallback_res = requests.get(fallback_url).json()
+        if fallback_res.get("Response") == "True":
+            return fallback_res
+
+    return None  # Nothing found
 
 # --- Search Field ---
 title_input = st.text_input("Search for a TV Show")
