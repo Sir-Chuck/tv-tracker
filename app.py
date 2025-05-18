@@ -13,7 +13,6 @@ if not st.session_state.authenticated:
     pw = st.text_input("🔒 Enter password to access app", type="password")
     if pw == st.secrets["APP_PASSWORD"]:
         st.session_state.authenticated = True
-        st.experimental_rerun()
     else:
         st.stop()
 
