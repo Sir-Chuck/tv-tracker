@@ -3,10 +3,21 @@ import pandas as pd
 import requests
 from datetime import date
 
-# --- App Config ---
+# --- Password Gate ---
 st.set_page_config(page_title="TV Tracker", layout="wide")
 
-# --- Branding ---
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+if not st.session_state.authenticated:
+    pw = st.text_input("🔒 Enter password to access app", type="password")
+    if pw == st.secrets["APP_PASSWORD"]:
+        st.session_state.authenticated = True
+        st.experimental_rerun()
+    else:
+        st.stop()
+
+# --- Styles ---
 st.markdown("""
     <style>
         html, body, [class*="css"] {
@@ -45,7 +56,7 @@ st.markdown(
 # --- Constants ---
 CSV_FILE = "tv_data.csv"
 
-# --- Load CSV ---
+# --- Load Data ---
 @st.cache_data
 def load_data():
     try:
@@ -63,10 +74,11 @@ data = load_data()
 # --- IMDb API via RapidAPI ---
 def fetch_imdb_data(title):
     headers = {
-        "X-RapidAPI-Key": "12e1f6f958msh083fbd647ffa585p1748d7jsn2af987ad26ca",
+        "X-RapidAPI-Key": st.secrets["RAPIDAPI_KEY"],
         "X-RapidAPI-Host": "imdb8.p.rapidapi.com"
     }
 
+    # Step 1: Search
     search_url = "https://imdb8.p.rapidapi.com/title/find"
     search_params = {"q": title}
     search_res = requests.get(search_url, headers=headers, params=search_params).json()
@@ -80,18 +92,31 @@ def fetch_imdb_data(title):
     selection = st.selectbox("🎯 Select the correct show", options)
     selected_id = results[options.index(selection)]["id"].split("/")[-2]
 
+    # Step 2: Details + Ratings
     detail_url = "https://imdb8.p.rapidapi.com/title/get-details"
     rating_url = "https://imdb8.p.rapidapi.com/title/get-ratings"
 
     details = requests.get(detail_url, headers=headers, params={"tconst": selected_id}).json()
     ratings = requests.get(rating_url, headers=headers, params={"tconst": selected_id}).json()
 
+    # Genre
+    genres = ", ".join(details.get("genres", [])) if details.get("genres") else ""
+
+    # Production
+    prod = details.get("production", {}).get("company", {}).get("name") or \
+           details.get("productionStatus", {}).get("status") or ""
+
+    # Streaming platform guess
+    network_guess = details.get("production", {}).get("distributor", {}).get("name", "")
+    streaming = network_guess or "N/A"
+
     return {
         "Title": details.get("title", ""),
-        "Genre": ", ".join(details.get("genres", [])),
+        "Genre": genres,
         "Rating": ratings.get("rating", ""),
         "Years": str(details.get("year", "")),
-        "Production": details.get("productionStatus", {}).get("status", "")
+        "Production": prod,
+        "Streaming": streaming
     }
 
 # --- Upload CSV ---
@@ -123,17 +148,17 @@ with st.form("add_form"):
     watched = st.selectbox("Watched Status", ["Completed", "In Progress", "Ongoing", "Not Started"])
     rating = st.text_input("IMDb Rating", value=autofill.get("Rating", ""))
     years = st.text_input("Years it Ran", value=autofill.get("Years", ""))
-    streaming = st.text_input("Streaming Platform")
+    streaming = st.text_input("Streaming Platform", value=autofill.get("Streaming", ""))
     production = st.text_input("Production", value=autofill.get("Production", ""))
 
     st.markdown("### 🎯 Your Personal Scores (0–10)")
-    fw = st.slider("First Watch", 0, 10, 5)
-    rw = st.slider("Rewatchability", 0, 10, 5)
-    orig = st.slider("Originality", 0, 10, 5)
-    chars = st.slider("Characters", 0, 10, 5)
-    prod_score = st.slider("Production Quality", 0, 10, 5)
-    concl = st.slider("Conclusiveness", 0, 10, 5)
-    writing = st.slider("Writing", 0, 10, 5)
+    fw = st.slider("First Watch", 0.0, 10.0, 5.0, step=0.1)
+    rw = st.slider("Rewatchability", 0.0, 10.0, 5.0, step=0.1)
+    orig = st.slider("Originality", 0.0, 10.0, 5.0, step=0.1)
+    chars = st.slider("Characters", 0.0, 10.0, 5.0, step=0.1)
+    prod_score = st.slider("Production Quality", 0.0, 10.0, 5.0, step=0.1)
+    concl = st.slider("Conclusiveness", 0.0, 10.0, 5.0, step=0.1)
+    writing = st.slider("Writing", 0.0, 10.0, 5.0, step=0.1)
 
     if st.form_submit_button("Add Show"):
         # Autofill missing fields just in case
@@ -143,6 +168,7 @@ with st.form("add_form"):
             rating = rating or fallback.get("Rating", "")
             years = years or fallback.get("Years", "")
             production = production or fallback.get("Production", "")
+            streaming = streaming or fallback.get("Streaming", "")
 
         avg = round((fw + rw + orig + chars + prod_score + concl + writing) / 7, 2)
 
