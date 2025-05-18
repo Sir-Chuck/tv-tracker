@@ -24,7 +24,7 @@ def load_data():
 data = load_data()
 
 # --- OMDb API Call ---
-OMDB_API_KEY = "ead2f7a6"
+OMDB_API_KEY = st.secrets["OMDB_API_KEY"]
 
 def fetch_show_data(title):
     url = f"http://www.omdbapi.com/?t={title}&apikey={OMDB_API_KEY}&type=series"
