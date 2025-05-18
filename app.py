@@ -63,7 +63,21 @@ data = load_data()
 
 # --- OMDb Search ---
 def fetch_omdb_data(title):
-    # 1. Try fuzzy search first
+    # Fallback using known IMDb IDs
+    imdb_id = MANUAL_IMDB_IDS.get(title.strip())
+    if imdb_id:
+        url = f"http://www.omdbapi.com/?i={imdb_id}&apikey={OMDB_API_KEY}"
+        res = requests.get(url).json()
+        if res.get("Response") == "True":
+            return {
+                "Title": res.get("Title", ""),
+                "Genre": res.get("Genre", ""),
+                "Rating": res.get("imdbRating", ""),
+                "Years": res.get("Year", ""),
+                "Production": res.get("Production", "")
+            }
+
+    # Fuzzy search fallback
     search_url = f"http://www.omdbapi.com/?s={title}&apikey={OMDB_API_KEY}&type=series"
     search_res = requests.get(search_url).json()
     search_results = search_res.get("Search", [])
@@ -71,8 +85,8 @@ def fetch_omdb_data(title):
     if search_results:
         options = [f"{item['Title']} ({item.get('Year', 'N/A')})" for item in search_results]
         selection = st.selectbox("🎯 Select the correct show", options)
+        selected_title = selection.split(" (")[0]
 
-        selected_title = selection.split(" (")[0]  # strip off the year
         selected_url = f"http://www.omdbapi.com/?t={selected_title}&apikey={OMDB_API_KEY}&type=series"
         selected_res = requests.get(selected_url).json()
 
@@ -87,6 +101,7 @@ def fetch_omdb_data(title):
 
     st.error("❌ No show found. Try refining your search.")
     return {}
+
 
 # --- Upload CSV ---
 st.markdown("📂 **Upload a CSV to start or use the form below to add new shows.**")
