@@ -85,7 +85,10 @@ if uploaded_file:
 
 # --- Display Table ---
 st.subheader("📊 My Tracked Shows")
-st.dataframe(data.sort_values("Avg Score", ascending=False), use_container_width=True)
+if "Avg Score" in data.columns:
+    st.dataframe(data.sort_values("Avg Score", ascending=False), use_container_width=True)
+else:
+    st.dataframe(data, use_container_width=True)
 
 st.markdown("---")
 
