@@ -63,20 +63,7 @@ data = load_data()
 
 # --- OMDb Search ---
 def fetch_omdb_data(title):
-    # 1. Try exact match
-    url = f"http://www.omdbapi.com/?t={title}&apikey={OMDB_API_KEY}&type=series"
-    exact_res = requests.get(url).json()
-
-    if exact_res.get("Response") == "True":
-        return {
-            "Title": exact_res.get("Title", ""),
-            "Genre": exact_res.get("Genre", ""),
-            "Rating": exact_res.get("imdbRating", ""),
-            "Years": exact_res.get("Year", ""),
-            "Production": exact_res.get("Production", "")
-        }
-
-    # 2. Try fuzzy search
+    # 1. Try fuzzy search first
     search_url = f"http://www.omdbapi.com/?s={title}&apikey={OMDB_API_KEY}&type=series"
     search_res = requests.get(search_url).json()
     search_results = search_res.get("Search", [])
@@ -85,10 +72,7 @@ def fetch_omdb_data(title):
         options = [f"{item['Title']} ({item.get('Year', 'N/A')})" for item in search_results]
         selection = st.selectbox("🎯 Select the correct show", options)
 
-        # Extract title from selected string
-        selected_title = selection.split(" (")[0]
-
-        # Fetch full metadata
+        selected_title = selection.split(" (")[0]  # strip off the year
         selected_url = f"http://www.omdbapi.com/?t={selected_title}&apikey={OMDB_API_KEY}&type=series"
         selected_res = requests.get(selected_url).json()
 
@@ -101,7 +85,6 @@ def fetch_omdb_data(title):
                 "Production": selected_res.get("Production", "")
             }
 
-    # 3. Nothing found
     st.error("❌ No show found. Try refining your search.")
     return {}
 
